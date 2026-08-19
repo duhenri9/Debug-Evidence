@@ -1,0 +1,56 @@
+{
+  "incident_id": "INC-001",
+  "inputs": {
+    "logs": [
+      "2026-08-19T12:00:00Z ERROR database timeout while serving request",
+      "2026-08-19T12:00:01Z WARN cache miss rate exceeded threshold"
+    ],
+    "stack_trace": "CacheLookupError: cache backend returned repeated misses",
+    "environment": {
+      "DB_HOST": "db.internal",
+      "CACHE_TTL_SECONDS": "0",
+      "API_TOKEN": "debug-evidence-demo-not-a-live-token"
+    },
+    "recent_diff": "+ CACHE_TTL_SECONDS=0\n- CACHE_TTL_SECONDS=300\n"
+  },
+  "hypotheses": [
+    {
+      "id": "database-misconfiguration",
+      "statement": "The database endpoint is misconfigured."
+    },
+    {
+      "id": "cache-thrash",
+      "statement": "A recent configuration change disabled useful cache retention."
+    }
+  ],
+  "probes": [
+    {
+      "id": "p-db-log",
+      "hypothesis_id": "database-misconfiguration",
+      "kind": "log_contains",
+      "relation": "support",
+      "params": {"needle": "database timeout"}
+    },
+    {
+      "id": "p-db-config-valid",
+      "hypothesis_id": "database-misconfiguration",
+      "kind": "env_equals",
+      "relation": "contradict",
+      "params": {"key": "DB_HOST", "value": "db.internal"}
+    },
+    {
+      "id": "p-cache-diff",
+      "hypothesis_id": "cache-thrash",
+      "kind": "diff_contains",
+      "relation": "support",
+      "params": {"needle": "CACHE_TTL_SECONDS=0"}
+    },
+    {
+      "id": "p-cache-stack",
+      "hypothesis_id": "cache-thrash",
+      "kind": "stack_contains",
+      "relation": "support",
+      "params": {"needle": "CacheLookupError"}
+    }
+  ]
+}
