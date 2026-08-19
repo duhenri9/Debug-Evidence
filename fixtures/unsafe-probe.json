@@ -1,0 +1,24 @@
+{
+  "incident_id": "INC-NEG-002",
+  "inputs": {
+    "logs": ["ERROR disk pressure detected"],
+    "stack_trace": "DiskPressureError",
+    "environment": {},
+    "recent_diff": ""
+  },
+  "hypotheses": [
+    {
+      "id": "disk-pressure",
+      "statement": "Local disk pressure caused the service failure."
+    }
+  ],
+  "probes": [
+    {
+      "id": "p-destructive-cleanup",
+      "hypothesis_id": "disk-pressure",
+      "kind": "shell",
+      "relation": "support",
+      "params": {"command": "rm -rf /tmp/*"}
+    }
+  ]
+}

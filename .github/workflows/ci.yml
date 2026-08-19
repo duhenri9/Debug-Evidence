@@ -1,0 +1,79 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@bfe8cc55a7890e3d6672eda6460ef37bfcc70755
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+
+      - name: Compile
+        run: python -m compileall src
+
+      - name: Test
+        run: python -m pytest -q
+
+      - name: Ruff lint
+        run: python -m ruff check src tests
+
+      - name: Ruff format
+        run: python -m ruff format --check src tests
+
+      - name: Mypy
+        run: python -m mypy src
+
+      - name: Generate misleading-log evidence bundle
+        run: debug-evidence fixtures/misleading-log.json --out artifacts/misleading-log.json
+
+      - name: Generate missing-evidence control
+        run: debug-evidence fixtures/missing-evidence.json --out artifacts/missing-evidence.json
+
+      - name: Generate unsafe-probe control
+        run: debug-evidence fixtures/unsafe-probe.json --out artifacts/unsafe-probe.json
+
+      - name: Prove bounded outcomes
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          main = json.loads(Path("artifacts/misleading-log.json").read_text())
+          statuses = {item["hypothesis_id"]: item["status"] for item in main["hypotheses"]}
+          assert statuses["database-misconfiguration"] == "CONTRADICTED"
+          assert statuses["cache-thrash"] == "SUPPORTED"
+          assert main["redacted_environment"]["API_TOKEN"] == "[REDACTED]"
+
+          missing = json.loads(Path("artifacts/missing-evidence.json").read_text())
+          assert missing["hypotheses"][0]["status"] == "INDETERMINATE"
+
+          unsafe = json.loads(Path("artifacts/unsafe-probe.json").read_text())
+          assert unsafe["hypotheses"][0]["status"] == "INDETERMINATE"
+          assert unsafe["probes"][0]["blocked"] is True
+          PY
+
+      - name: Upload incident evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: debug-evidence-v0
+          path: artifacts/
+          if-no-files-found: error
