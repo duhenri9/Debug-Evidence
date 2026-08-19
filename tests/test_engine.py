@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from debug_evidence.engine import analyse_incident
-from debug_evidence.models import HypothesisStatus
+from debug_evidence.models import Bundle, HypothesisResult, HypothesisStatus
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
@@ -16,9 +16,8 @@ def load(name: str) -> dict[str, Any]:
     return payload
 
 
-def by_id(bundle: object, hypothesis_id: str) -> object:
-    hypotheses = getattr(bundle, "hypotheses")
-    return next(item for item in hypotheses if item.hypothesis_id == hypothesis_id)
+def by_id(bundle: Bundle, hypothesis_id: str) -> HypothesisResult:
+    return next(item for item in bundle.hypotheses if item.hypothesis_id == hypothesis_id)
 
 
 def test_misleading_loud_log_is_preserved_but_contradicted() -> None:
