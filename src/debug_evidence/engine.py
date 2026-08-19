@@ -125,6 +125,11 @@ def _run_probe(inputs: Mapping[str, Any], raw: Mapping[str, Any]) -> ProbeEviden
     )
 
 
+def _is_unresolved(probe: ProbeEvidence) -> bool:
+    support_not_matched = probe.relation == "support" and probe.matched is False
+    return probe.blocked or probe.matched is None or support_not_matched
+
+
 def _classify_hypothesis(
     hypothesis: Mapping[str, Any], probes: Sequence[ProbeEvidence]
 ) -> HypothesisResult:
@@ -140,11 +145,7 @@ def _classify_hypothesis(
         for probe in relevant
         if probe.relation == "contradict" and probe.matched is True
     )
-    unresolved = sorted(
-        probe.probe_id
-        for probe in relevant
-        if probe.blocked or probe.matched is None or (probe.relation == "support" and not probe.matched)
-    )
+    unresolved = sorted(probe.probe_id for probe in relevant if _is_unresolved(probe))
 
     if contradict:
         status = HypothesisStatus.CONTRADICTED
