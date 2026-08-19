@@ -1,0 +1,24 @@
+{
+  "incident_id": "INC-NEG-001",
+  "inputs": {
+    "logs": ["ERROR request failed after dependency timeout"],
+    "stack_trace": null,
+    "environment": {},
+    "recent_diff": null
+  },
+  "hypotheses": [
+    {
+      "id": "dependency-endpoint",
+      "statement": "The dependency endpoint points to an unavailable host."
+    }
+  ],
+  "probes": [
+    {
+      "id": "p-endpoint",
+      "hypothesis_id": "dependency-endpoint",
+      "kind": "env_equals",
+      "relation": "support",
+      "params": {"key": "DEPENDENCY_HOST", "value": "expected.internal"}
+    }
+  ]
+}
