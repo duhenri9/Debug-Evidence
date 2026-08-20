@@ -74,15 +74,11 @@ _PRIVATE_KEY = re.compile(
 _GITHUB_PAT = re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b")
 _OPENAI_KEY = re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")
 _AWS_ACCESS = re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b")
-_PYTHON_FRAME = re.compile(
-    r'^\s*File "(?P<file>.+?)", line (?P<line>\d+), in (?P<fn>.+?)\s*$'
-)
+_PYTHON_FRAME = re.compile(r'^\s*File "(?P<file>.+?)", line (?P<line>\d+), in (?P<fn>.+?)\s*$')
 _NODE_FRAME_WITH_FN = re.compile(
     r"^\s*at\s+(?P<fn>.+?)\s+\((?P<file>.+?):(?P<line>\d+):(?P<column>\d+)\)\s*$"
 )
-_NODE_FRAME = re.compile(
-    r"^\s*at\s+(?P<file>.+?):(?P<line>\d+):(?P<column>\d+)\s*$"
-)
+_NODE_FRAME = re.compile(r"^\s*at\s+(?P<file>.+?):(?P<line>\d+):(?P<column>\d+)\s*$")
 
 
 class CollectionError(RuntimeError):
@@ -469,18 +465,14 @@ def _collect_git(
         "read recent commits",
     )
     recent_commits = tuple(
-        _redact(line, workspace, exact_secrets)
-        for line in recent_raw.splitlines()
-        if line
+        _redact(line, workspace, exact_secrets) for line in recent_raw.splitlines() if line
     )
     return GitEvidence(
         available=True,
         repository_root="<WORKSPACE>",
         head_sha=head,
         branch=branch,
-        status_entries=tuple(
-            _redact(item, workspace, exact_secrets) for item in status_entries
-        ),
+        status_entries=tuple(_redact(item, workspace, exact_secrets) for item in status_entries),
         changed_paths=tuple(sorted(changed_paths)),
         diff_sha256=diff_sha256,
         diff_truncated=diff_truncated,
@@ -780,10 +772,7 @@ def collection_failure(
 
 
 def _json_bytes(payload: object) -> bytes:
-    return (
-        json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2).encode()
-        + b"\n"
-    )
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2).encode() + b"\n"
 
 
 def _archive_payloads(report: LocalIncidentReport) -> dict[str, bytes]:
