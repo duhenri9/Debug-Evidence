@@ -115,3 +115,19 @@ class ArchiveReceipt:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class LocalCollectionFailure:
+    """Machine-readable fail-closed result when local evidence cannot be collected safely."""
+
+    schema: str
+    incident_id: str
+    outcome: str
+    error_code: str
+    error: str
+    claim_boundary: str
+    receipt_sha256: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
