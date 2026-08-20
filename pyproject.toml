@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "debug-evidence"
-version = "0.1.0"
+version = "0.2.0"
 description = "Evidence-driven bounded incident diagnosis CLI"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,6 +17,7 @@ dev = ["mypy>=1.11", "pytest>=8.3", "ruff>=0.8"]
 
 [project.scripts]
 debug-evidence = "debug_evidence.cli:main"
+debug-evidence-local = "debug_evidence.local_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
