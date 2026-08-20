@@ -74,7 +74,9 @@ _PRIVATE_KEY = re.compile(
 _GITHUB_PAT = re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b")
 _OPENAI_KEY = re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")
 _AWS_ACCESS = re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b")
-_PYTHON_FRAME = re.compile(r'^\s*File "(?P<file>.+?)", line (?P<line>\d+), in (?P<fn>.+?)\s*$')
+_PYTHON_FRAME = re.compile(
+    r'^\s*File "(?P<file>.+?)", line (?P<line>\d+), in (?P<fn>.+?)\s*$'
+)
 _NODE_FRAME_WITH_FN = re.compile(
     r"^\s*at\s+(?P<fn>.+?)\s+\((?P<file>.+?):(?P<line>\d+):(?P<column>\d+)\)\s*$"
 )
@@ -93,7 +95,12 @@ class CollectionError(RuntimeError):
 
 
 def _canonical_json(payload: object) -> bytes:
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    return json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode()
 
 
 def _sha256_bytes(payload: bytes) -> str:
@@ -121,11 +128,17 @@ def _safe_path(workspace: Path, relative: str) -> Path:
     for part in PurePosixPath(relative).parts:
         current = current / part
         if current.is_symlink():
-            raise CollectionError("SYMLINK_BLOCKED", f"symlink path is not collectable: {relative}")
+            raise CollectionError(
+                "SYMLINK_BLOCKED",
+                f"symlink path is not collectable: {relative}",
+            )
     try:
         resolved_parent = current.parent.resolve(strict=True)
     except FileNotFoundError as error:
-        raise CollectionError("PATH_MISSING", f"parent path is missing: {relative}") from error
+        raise CollectionError(
+            "PATH_MISSING",
+            f"parent path is missing: {relative}",
+        ) from error
     if not resolved_parent.is_relative_to(root):
         raise CollectionError("UNSAFE_PATH", f"path escapes workspace: {relative}")
     return current
@@ -134,21 +147,23 @@ def _safe_path(workspace: Path, relative: str) -> Path:
 def _workspace_tokenise(text: str, workspace: Path) -> str:
     root = str(workspace.resolve())
     tokenised = text.replace(root, "<WORKSPACE>")
-    tokenised = tokenised.replace(root.replace("\\", "/"), "<WORKSPACE>")
-    return tokenised
+    return tokenised.replace(root.replace("\\", "/"), "<WORKSPACE>")
 
 
 def _redact(text: str, workspace: Path, exact_secrets: Sequence[str]) -> str:
     redacted = _workspace_tokenise(text, workspace)
-    for secret in sorted({item for item in exact_secrets if item}, key=len, reverse=True):
+    unique_secrets = {item for item in exact_secrets if item}
+    for secret in sorted(unique_secrets, key=len, reverse=True):
         redacted = redacted.replace(secret, "[REDACTED]")
     redacted = _BEARER.sub(r"\1[REDACTED]", redacted)
-    redacted = _ASSIGNMENT_SECRET.sub(lambda match: f"{match.group(1)}=[REDACTED]", redacted)
+    redacted = _ASSIGNMENT_SECRET.sub(
+        lambda match: f"{match.group(1)}=[REDACTED]",
+        redacted,
+    )
     redacted = _PRIVATE_KEY.sub("[REDACTED_PRIVATE_KEY]", redacted)
     redacted = _GITHUB_PAT.sub("[REDACTED_TOKEN]", redacted)
     redacted = _OPENAI_KEY.sub("[REDACTED_API_KEY]", redacted)
-    redacted = _AWS_ACCESS.sub("[REDACTED_ACCESS_KEY]", redacted)
-    return redacted
+    return _AWS_ACCESS.sub("[REDACTED_ACCESS_KEY]", redacted)
 
 
 def _bounded_file_preview(
@@ -174,10 +189,7 @@ def _bounded_file_preview(
     tail: deque[bytes] = deque()
     tail_size = 0
     with path.open("rb") as stream:
-        while True:
-            chunk = stream.read(65_536)
-            if not chunk:
-                break
+        while chunk := stream.read(65_536):
             digest.update(chunk)
             tail.append(chunk)
             tail_size += len(chunk)
@@ -194,7 +206,7 @@ def _bounded_file_preview(
         preview_byte_limit=preview_bytes,
         truncated=size > preview_bytes,
         redacted_preview=redacted,
-        redacted_preview_sha256=_sha256_bytes(redacted.encode("utf-8")),
+        redacted_preview_sha256=_sha256_bytes(redacted.encode()),
     )
 
 
@@ -212,18 +224,20 @@ def _parse_python_trace(text: str, source_path: str | None) -> TraceEvidence:
                     column=None,
                 )
             )
+
     error_type: str | None = None
     error_message: str | None = None
     for line in reversed(lines):
         stripped = line.strip()
-        if not stripped or stripped.startswith("File ") or stripped.startswith("Traceback"):
+        if not stripped or stripped.startswith(("File ", "Traceback")):
             continue
-        if ":" in stripped:
-            candidate, message = stripped.split(":", 1)
-            if candidate and " " not in candidate:
-                error_type = candidate
-                error_message = message.strip() or None
-                break
+        if ":" not in stripped:
+            continue
+        candidate, message = stripped.split(":", 1)
+        if candidate and " " not in candidate:
+            error_type = candidate
+            error_message = message.strip() or None
+            break
     return TraceEvidence(
         runtime="python",
         error_type=error_type,
@@ -236,10 +250,9 @@ def _parse_python_trace(text: str, source_path: str | None) -> TraceEvidence:
 
 def _parse_node_trace(text: str, source_path: str | None) -> TraceEvidence:
     frames: list[TraceFrame] = []
-    lines = text.splitlines()
     error_type: str | None = None
     error_message: str | None = None
-    for line in lines:
+    for line in text.splitlines():
         stripped = line.strip()
         if not stripped:
             continue
@@ -291,21 +304,38 @@ def parse_trace(runtime: str, text: str, source_path: str | None = None) -> Trac
     raise CollectionError("UNSUPPORTED_RUNTIME", f"unsupported runtime: {runtime}")
 
 
+def _git_environment() -> dict[str, str]:
+    return {
+        "PATH": os.environ.get("PATH", ""),
+        "LANG": "C",
+        "LC_ALL": "C",
+    }
+
+
 def _run_git(root: Path, arguments: Sequence[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", *arguments],
-        cwd=root,
-        check=False,
-        capture_output=True,
-        text=True,
-        env={"PATH": os.environ.get("PATH", ""), "LANG": "C", "LC_ALL": "C"},
-    )
+    try:
+        return subprocess.run(
+            ["git", *arguments],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=_git_environment(),
+        )
+    except OSError as error:
+        return subprocess.CompletedProcess(
+            args=["git", *arguments],
+            returncode=127,
+            stdout="",
+            stderr=str(error),
+        )
 
 
 def _git_required(root: Path, arguments: Sequence[str], context: str) -> str:
     completed = _run_git(root, arguments)
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip() or "git command failed"
+        detail = detail.replace(str(root.resolve()), "<WORKSPACE>")
         raise CollectionError("GIT_EVIDENCE_ERROR", f"{context}: {detail}")
     return completed.stdout
 
@@ -327,17 +357,23 @@ def _read_stream_evidence(
         )
     stream.seek(0)
     digest = hashlib.sha256()
-    while True:
-        chunk = stream.read(65_536)
-        if not chunk:
-            break
+    while chunk := stream.read(65_536):
         digest.update(chunk)
     stream.seek(0)
     preview_raw = stream.read(preview_bytes)
-    preview = _redact(preview_raw.decode("utf-8", errors="replace"), workspace, exact_secrets)
-    if size > preview_bytes:
+    preview = _redact(
+        preview_raw.decode("utf-8", errors="replace"),
+        workspace,
+        exact_secrets,
+    )
+    truncated = size > preview_bytes
+    if truncated:
         preview += "\n[TRUNCATED]"
-    return digest.hexdigest(), size, size > preview_bytes, preview
+    return digest.hexdigest(), size, truncated, preview
+
+
+def _split_nul_paths(raw: str) -> set[str]:
+    return {item for item in raw.split("\0") if item}
 
 
 def _collect_git(
@@ -350,7 +386,10 @@ def _collect_git(
     probe = _run_git(workspace, ["rev-parse", "--show-toplevel"])
     if probe.returncode != 0:
         if require_git:
-            raise CollectionError("GIT_REQUIRED", "workspace is not inside a readable Git repository")
+            raise CollectionError(
+                "GIT_REQUIRED",
+                "workspace is not inside a readable Git repository",
+            )
         return GitEvidence(
             available=False,
             repository_root=None,
@@ -366,42 +405,56 @@ def _collect_git(
         )
 
     repository_root = Path(probe.stdout.strip()).resolve()
-    if not workspace.resolve().is_relative_to(repository_root):
-        raise CollectionError("GIT_IDENTITY_ERROR", "workspace is outside resolved Git root")
+    if repository_root != workspace.resolve():
+        raise CollectionError(
+            "GIT_ROOT_MISMATCH",
+            "V0.2 requires the explicit workspace to equal the resolved Git root",
+        )
     head = _git_required(repository_root, ["rev-parse", "HEAD"], "resolve HEAD").strip()
-    branch_raw = _git_required(
+
+    branch_probe = _run_git(
         repository_root,
         ["symbolic-ref", "--quiet", "--short", "HEAD"],
-        "resolve branch",
     )
-    branch = branch_raw.strip() or "DETACHED"
+    if branch_probe.returncode == 0:
+        branch = branch_probe.stdout.strip()
+    elif branch_probe.returncode == 1:
+        branch = "DETACHED"
+    else:
+        raise CollectionError("GIT_EVIDENCE_ERROR", "cannot resolve branch identity")
+
     status = _git_required(
         repository_root,
         ["status", "--porcelain=v1", "--untracked-files=all"],
         "read status",
     )
     status_entries = tuple(line for line in status.splitlines() if line)
-    changed_paths: set[str] = set()
-    for line in status_entries:
-        raw_path = line[3:]
-        if " -> " in raw_path:
-            left, right = raw_path.split(" -> ", 1)
-            changed_paths.update((left, right))
-        else:
-            changed_paths.add(raw_path)
+    tracked_raw = _git_required(
+        repository_root,
+        ["diff", "--name-only", "-z", "HEAD", "--"],
+        "read changed tracked paths",
+    )
+    untracked_raw = _git_required(
+        repository_root,
+        ["ls-files", "--others", "--exclude-standard", "-z"],
+        "read untracked paths",
+    )
+    changed_paths = _split_nul_paths(tracked_raw) | _split_nul_paths(untracked_raw)
 
     with tempfile.TemporaryFile() as diff_stream:
-        completed = subprocess.run(
-            ["git", "diff", "--binary", "--no-color", "HEAD", "--"],
-            cwd=repository_root,
-            check=False,
-            stdout=diff_stream,
-            stderr=subprocess.PIPE,
-            env={"PATH": os.environ.get("PATH", ""), "LANG": "C", "LC_ALL": "C"},
-        )
+        try:
+            completed = subprocess.run(
+                ["git", "diff", "--binary", "--no-color", "HEAD", "--"],
+                cwd=repository_root,
+                check=False,
+                stdout=diff_stream,
+                stderr=subprocess.PIPE,
+                env=_git_environment(),
+            )
+        except OSError as error:
+            raise CollectionError("GIT_EVIDENCE_ERROR", "cannot execute git diff") from error
         if completed.returncode != 0:
-            detail = completed.stderr.decode(errors="replace").strip() or "git diff failed"
-            raise CollectionError("GIT_EVIDENCE_ERROR", detail)
+            raise CollectionError("GIT_EVIDENCE_ERROR", "git diff failed")
         diff_sha256, _size, diff_truncated, diff_preview = _read_stream_evidence(
             diff_stream,
             preview_bytes=preview_bytes,
@@ -416,15 +469,18 @@ def _collect_git(
         "read recent commits",
     )
     recent_commits = tuple(
-        _redact(line, workspace, exact_secrets) for line in recent_raw.splitlines() if line
+        _redact(line, workspace, exact_secrets)
+        for line in recent_raw.splitlines()
+        if line
     )
-    root_label = "<WORKSPACE>" if repository_root == workspace.resolve() else "<GIT_ROOT>"
     return GitEvidence(
         available=True,
-        repository_root=root_label,
+        repository_root="<WORKSPACE>",
         head_sha=head,
         branch=branch,
-        status_entries=tuple(_redact(item, workspace, exact_secrets) for item in status_entries),
+        status_entries=tuple(
+            _redact(item, workspace, exact_secrets) for item in status_entries
+        ),
         changed_paths=tuple(sorted(changed_paths)),
         diff_sha256=diff_sha256,
         diff_truncated=diff_truncated,
@@ -435,13 +491,16 @@ def _collect_git(
 
 
 def _node_version() -> str | None:
-    completed = subprocess.run(
-        ["node", "--version"],
-        check=False,
-        capture_output=True,
-        text=True,
-        env={"PATH": os.environ.get("PATH", "")},
-    )
+    try:
+        completed = subprocess.run(
+            ["node", "--version"],
+            check=False,
+            capture_output=True,
+            text=True,
+            env={"PATH": os.environ.get("PATH", "")},
+        )
+    except OSError:
+        return None
     if completed.returncode != 0:
         return None
     return completed.stdout.strip() or None
@@ -481,43 +540,66 @@ def _environment_evidence(
                 exact_secrets.append(value)
         else:
             evidence.append((key, _workspace_tokenise(value, workspace)))
-    return tuple(sorted(evidence)), tuple(sorted(set(exact_secrets), key=len, reverse=True))
+    secrets = tuple(sorted(set(exact_secrets), key=len, reverse=True))
+    return tuple(sorted(evidence)), secrets
 
 
-def _filesystem_evidence(workspace: Path, raw_paths: Sequence[object]) -> tuple[FilesystemEvidence, ...]:
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(65_536):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _filesystem_evidence(
+    workspace: Path,
+    raw_paths: Sequence[object],
+) -> tuple[FilesystemEvidence, ...]:
     evidence: list[FilesystemEvidence] = []
     for raw in raw_paths:
         relative = _normalise_relative(raw)
         path = _safe_path(workspace, relative)
         if not path.exists():
             evidence.append(
-                FilesystemEvidence(path=relative, kind="missing", size_bytes=None, sha256=None, mode=None)
+                FilesystemEvidence(
+                    path=relative,
+                    kind="missing",
+                    size_bytes=None,
+                    sha256=None,
+                    mode=None,
+                )
             )
             continue
         info = path.stat()
         mode = stat.filemode(info.st_mode)
         if path.is_dir():
             evidence.append(
-                FilesystemEvidence(path=relative, kind="directory", size_bytes=None, sha256=None, mode=mode)
+                FilesystemEvidence(
+                    path=relative,
+                    kind="directory",
+                    size_bytes=None,
+                    sha256=None,
+                    mode=mode,
+                )
             )
             continue
         if not path.is_file():
-            raise CollectionError("UNSUPPORTED_FILE_TYPE", f"unsupported metadata target: {relative}")
+            raise CollectionError(
+                "UNSUPPORTED_FILE_TYPE",
+                f"unsupported metadata target: {relative}",
+            )
         if info.st_size > MAX_SOURCE_BYTES:
-            raise CollectionError("SOURCE_TOO_LARGE", f"metadata file exceeds bound: {relative}")
-        digest = hashlib.sha256()
-        with path.open("rb") as stream:
-            while True:
-                chunk = stream.read(65_536)
-                if not chunk:
-                    break
-                digest.update(chunk)
+            raise CollectionError(
+                "SOURCE_TOO_LARGE",
+                f"metadata file exceeds bound: {relative}",
+            )
         evidence.append(
             FilesystemEvidence(
                 path=relative,
                 kind="file",
                 size_bytes=info.st_size,
-                sha256=digest.hexdigest(),
+                sha256=_file_sha256(path),
                 mode=mode,
             )
         )
@@ -558,31 +640,43 @@ def collect_local_incident(
 
     root = workspace.resolve()
     if not root.is_dir():
-        raise CollectionError("WORKSPACE_MISSING", f"workspace is not a directory: {root}")
+        raise CollectionError("WORKSPACE_MISSING", "workspace path is not a directory")
     incident_id = str(spec.get("incident_id", "UNKNOWN"))
     runtime = str(spec.get("runtime", ""))
     if runtime not in {"python", "node"}:
-        raise CollectionError("UNSUPPORTED_RUNTIME", f"runtime must be python or node: {runtime!r}")
+        raise CollectionError(
+            "UNSUPPORTED_RUNTIME",
+            f"runtime must be python or node: {runtime!r}",
+        )
     preview_bytes = int(spec.get("preview_bytes", DEFAULT_PREVIEW_BYTES))
     if preview_bytes < 1 or preview_bytes > MAX_SOURCE_BYTES:
-        raise CollectionError("INVALID_SPEC", "preview_bytes is outside the allowed bound")
+        raise CollectionError(
+            "INVALID_SPEC",
+            "preview_bytes is outside the allowed bound",
+        )
 
     source_environment = os.environ if environment_source is None else environment_source
     raw_env_allowlist = spec.get("env_allowlist", [])
     if not isinstance(raw_env_allowlist, list):
         raise CollectionError("INVALID_SPEC", "env_allowlist must be a JSON array")
-    environment, exact_secrets = _environment_evidence(raw_env_allowlist, source_environment, root)
+    environment, exact_secrets = _environment_evidence(
+        raw_env_allowlist,
+        source_environment,
+        root,
+    )
 
     raw_log_paths = spec.get("log_files", [])
     if not isinstance(raw_log_paths, list) or not raw_log_paths:
-        raise CollectionError("INVALID_SPEC", "log_files must be a non-empty JSON array")
+        raise CollectionError(
+            "INVALID_SPEC",
+            "log_files must be a non-empty JSON array",
+        )
     log_files: list[TextFileEvidence] = []
     for raw in raw_log_paths:
         relative = _normalise_relative(raw)
-        path = _safe_path(root, relative)
         log_files.append(
             _bounded_file_preview(
-                path,
+                _safe_path(root, relative),
                 relative,
                 preview_bytes=preview_bytes,
                 workspace=root,
@@ -607,10 +701,9 @@ def collect_local_incident(
         stack_file.path if stack_file else None,
     )
 
-    require_git = bool(spec.get("require_git", True))
     git = _collect_git(
         root,
-        require_git=require_git,
+        require_git=bool(spec.get("require_git", True)),
         preview_bytes=preview_bytes,
         exact_secrets=exact_secrets,
     )
@@ -628,8 +721,8 @@ def collect_local_incident(
         environment=environment,
     )
     bundle = analyse_incident(sanitised)
+    runtime_fingerprint = _runtime_fingerprint(runtime)
     spec_sha256 = _sha256_json(spec)
-
     unsigned: dict[str, Any] = {
         "schema": "debug-evidence.local-report.v0.2",
         "incident_id": incident_id,
@@ -640,13 +733,11 @@ def collect_local_incident(
         "trace": asdict(trace),
         "git": asdict(git),
         "environment": [list(item) for item in environment],
-        "runtime_fingerprint": asdict(_runtime_fingerprint(runtime)),
+        "runtime_fingerprint": asdict(runtime_fingerprint),
         "filesystem": [asdict(item) for item in filesystem],
         "bundle": bundle.to_dict(),
         "claim_boundary": LOCAL_CLAIM_BOUNDARY,
     }
-    runtime_fingerprint = _runtime_fingerprint(runtime)
-    unsigned["runtime_fingerprint"] = asdict(runtime_fingerprint)
     return LocalIncidentReport(
         schema="debug-evidence.local-report.v0.2",
         incident_id=incident_id,
@@ -665,7 +756,10 @@ def collect_local_incident(
     )
 
 
-def collection_failure(incident_id: str, error: CollectionError) -> LocalCollectionFailure:
+def collection_failure(
+    incident_id: str,
+    error: CollectionError,
+) -> LocalCollectionFailure:
     unsigned = {
         "schema": "debug-evidence.local-failure.v0.2",
         "incident_id": incident_id,
@@ -685,22 +779,23 @@ def collection_failure(incident_id: str, error: CollectionError) -> LocalCollect
     )
 
 
+def _json_bytes(payload: object) -> bytes:
+    return (
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2).encode()
+        + b"\n"
+    )
+
+
 def _archive_payloads(report: LocalIncidentReport) -> dict[str, bytes]:
     payloads: dict[str, bytes] = {
-        "collection.json": json.dumps(
-            report.to_dict(), ensure_ascii=False, sort_keys=True, indent=2
-        ).encode("utf-8")
-        + b"\n",
-        "bundle.json": json.dumps(
-            report.bundle.to_dict(), ensure_ascii=False, sort_keys=True, indent=2
-        ).encode("utf-8")
-        + b"\n",
-        "git/diff.patch": report.git.redacted_diff_preview.encode("utf-8"),
+        "collection.json": _json_bytes(report.to_dict()),
+        "bundle.json": _json_bytes(report.bundle.to_dict()),
+        "git/diff.patch": report.git.redacted_diff_preview.encode(),
     }
     for index, evidence in enumerate(report.log_files, start=1):
-        payloads[f"inputs/log-{index:02d}.txt"] = evidence.redacted_preview.encode("utf-8")
+        payloads[f"inputs/log-{index:02d}.txt"] = evidence.redacted_preview.encode()
     if report.stack_file is not None:
-        payloads["inputs/stack.txt"] = report.stack_file.redacted_preview.encode("utf-8")
+        payloads["inputs/stack.txt"] = report.stack_file.redacted_preview.encode()
     members = [
         {
             "path": path,
@@ -715,13 +810,14 @@ def _archive_payloads(report: LocalIncidentReport) -> dict[str, bytes]:
         "members": members,
         "claim_boundary": ARCHIVE_CLAIM_BOUNDARY,
     }
-    payloads["manifest.json"] = json.dumps(
-        manifest, ensure_ascii=False, sort_keys=True, indent=2
-    ).encode("utf-8") + b"\n"
+    payloads["manifest.json"] = _json_bytes(manifest)
     return payloads
 
 
-def build_incident_archive(report: LocalIncidentReport, destination: Path) -> ArchiveReceipt:
+def build_incident_archive(
+    report: LocalIncidentReport,
+    destination: Path,
+) -> ArchiveReceipt:
     """Write a deterministic, sanitised ZIP archive and return external byte evidence."""
 
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -735,14 +831,19 @@ def build_incident_archive(report: LocalIncidentReport, destination: Path) -> Ar
             archive.writestr(info, payload)
 
     archive_bytes = destination.read_bytes()
+    archive_sha256 = _sha256_bytes(archive_bytes)
     members = tuple(
-        ArchiveMember(path=path, sha256=_sha256_bytes(payload), byte_count=len(payload))
+        ArchiveMember(
+            path=path,
+            sha256=_sha256_bytes(payload),
+            byte_count=len(payload),
+        )
         for path, payload in sorted(payloads.items())
     )
     unsigned = {
         "schema": "debug-evidence.archive-receipt.v0.2",
         "incident_id": report.incident_id,
-        "archive_sha256": _sha256_bytes(archive_bytes),
+        "archive_sha256": archive_sha256,
         "archive_byte_count": len(archive_bytes),
         "members": [asdict(item) for item in members],
         "claim_boundary": ARCHIVE_CLAIM_BOUNDARY,
@@ -750,7 +851,7 @@ def build_incident_archive(report: LocalIncidentReport, destination: Path) -> Ar
     return ArchiveReceipt(
         schema="debug-evidence.archive-receipt.v0.2",
         incident_id=report.incident_id,
-        archive_sha256=unsigned["archive_sha256"],
+        archive_sha256=archive_sha256,
         archive_byte_count=len(archive_bytes),
         members=members,
         claim_boundary=ARCHIVE_CLAIM_BOUNDARY,
