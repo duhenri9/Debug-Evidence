@@ -147,9 +147,7 @@ def test_collects_python_trace_git_diff_env_and_sanitised_v0_analysis(tmp_path: 
 def test_node_stack_parser_handles_named_and_anonymous_frames() -> None:
     trace = parse_trace(
         "node",
-        "TypeError: boom\n"
-        "    at run (/workspace/app.js:10:4)\n"
-        "    at /workspace/index.js:2:1\n",
+        "TypeError: boom\n    at run (/workspace/app.js:10:4)\n    at /workspace/index.js:2:1\n",
         "stack.txt",
     )
 
