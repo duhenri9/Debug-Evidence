@@ -1,0 +1,43 @@
+{
+  "incident_id": "local-python-v02",
+  "runtime": "python",
+  "preview_bytes": 32768,
+  "require_git": true,
+  "log_files": ["logs/app.log"],
+  "stack_file": "logs/trace.txt",
+  "env_allowlist": ["APP_MODE", "WORKSPACE_HINT", "DEBUG_EVIDENCE_TEST_TOKEN"],
+  "metadata_paths": ["src/service.py", "logs/app.log"],
+  "hypotheses": [
+    {
+      "id": "database-outage",
+      "statement": "The incident is caused by a database outage."
+    },
+    {
+      "id": "cache-regression",
+      "statement": "A recent cache-limit regression is driving the incident."
+    }
+  ],
+  "probes": [
+    {
+      "id": "database-decoy-contradiction",
+      "hypothesis_id": "database-outage",
+      "kind": "stack_contains",
+      "relation": "contradict",
+      "params": {"needle": "CacheOverflow"}
+    },
+    {
+      "id": "cache-log-support",
+      "hypothesis_id": "cache-regression",
+      "kind": "log_contains",
+      "relation": "support",
+      "params": {"needle": "cache eviction storm"}
+    },
+    {
+      "id": "cache-diff-support",
+      "hypothesis_id": "cache-regression",
+      "kind": "diff_contains",
+      "relation": "support",
+      "params": {"needle": "CACHE_LIMIT = 1"}
+    }
+  ]
+}
