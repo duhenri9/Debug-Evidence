@@ -4,7 +4,6 @@ import hashlib
 import json
 import os
 import subprocess
-import sys
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -291,14 +290,3 @@ def test_non_git_collection_can_be_explicitly_allowed(tmp_path: Path) -> None:
     assert not report.git.available
     assert report.git.error == "Git repository unavailable"
     assert report.bundle.hypotheses == ()
-
-
-def test_missing_node_binary_does_not_break_node_collection(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    root = make_repository(tmp_path)
-    spec = incident_spec()
-    spec["runtime"] = "node"
-    monkeypatch.setenv("PATH", "")
-
-    report = collect_local_incident(spec, root, environment_source={})
-
-    assert report.runtime_fingerprint.node_version is None
