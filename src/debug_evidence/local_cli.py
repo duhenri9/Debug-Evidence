@@ -33,9 +33,22 @@ def _write_json(path: Path, payload: object) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("spec", type=Path, help="Local V0.2 incident collection spec")
-    parser.add_argument("--workspace", required=True, type=Path, help="Explicit evidence workspace")
-    parser.add_argument("--report", type=Path, help="Write the local collection report/failure JSON")
-    parser.add_argument("--archive", type=Path, help="Write a deterministic sanitised incident ZIP")
+    parser.add_argument(
+        "--workspace",
+        required=True,
+        type=Path,
+        help="Explicit evidence workspace",
+    )
+    parser.add_argument(
+        "--report",
+        type=Path,
+        help="Write the local collection report/failure JSON",
+    )
+    parser.add_argument(
+        "--archive",
+        type=Path,
+        help="Write a deterministic sanitised incident ZIP",
+    )
     parser.add_argument(
         "--archive-receipt",
         type=Path,
@@ -51,7 +64,10 @@ def main() -> int:
     except (OSError, json.JSONDecodeError, ValueError) as error:
         failure = collection_failure(
             "UNKNOWN",
-            CollectionError("SPEC_READ_ERROR", f"cannot read incident spec: {error}"),
+            CollectionError(
+                "SPEC_READ_ERROR",
+                f"cannot read incident spec ({type(error).__name__})",
+            ),
         )
         payload = failure.to_dict()
         if args.report:
