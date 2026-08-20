@@ -1,0 +1,10 @@
+{
+  "incident_id": "local-path-escape-v02",
+  "runtime": "python",
+  "require_git": true,
+  "log_files": ["../outside.log"],
+  "env_allowlist": [],
+  "metadata_paths": [],
+  "hypotheses": [],
+  "probes": []
+}
