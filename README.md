@@ -6,6 +6,24 @@ Debug Evidence is an open-source CLI for collecting runtime signals, testing bou
 
 > Diagnose before you mutate.
 
+
+## 60–90 second review
+
+**What this demonstrates:** a read-only incident-diagnosis CLI that collects bounded evidence, evaluates explicit hypotheses and preserves contradictory or missing evidence instead of inventing a confident root cause.
+
+**Fast local proof:** the offline V0 path needs only Python; it uses synthetic fixtures and does not require a model API key, cloud account or production log provider.
+
+~~~bash
+python -m pip install -e ".[dev]"
+debug-evidence fixtures/misleading-log.json
+debug-evidence fixtures/missing-evidence.json
+debug-evidence fixtures/unsafe-probe.json
+~~~
+
+**Engineering path:** start with the three controls above, then inspect [ARCHITECTURE](docs/ARCHITECTURE.md), the V0.2 local collection boundary, redaction/path-safety tests and CI evidence artifacts.
+
+**Evidence boundary:** the project demonstrates deterministic diagnosis semantics, bounded local collection and reproducible evidence bundles. It does not claim universal root-cause correctness, arbitrary shell diagnostics or autonomous remediation.
+
 ## Current engineering baseline
 
 Debug Evidence now has two executable evidence layers:
